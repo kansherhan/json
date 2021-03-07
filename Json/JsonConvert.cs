@@ -4,8 +4,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
-using System.Runtime.Serialization;
 using System.Text;
+using System.Runtime.Serialization;
 
 namespace Json
 {
@@ -18,8 +18,7 @@ namespace Json
 
         public static T FromJson<T>(string json)
         {
-            return new JsonReader<T>(json)
-                .Value;
+            return new JsonReader<T>(json).Value;
         }
     }
 
@@ -226,51 +225,50 @@ namespace Json
                 {
                     Json.Append('{');
 
-                    FieldInfo[] fieldInfos = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                    var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy;
+
+                    var fieldInfos = type.GetFields(flags);
+                    var propertyInfos = type.GetProperties(flags);
 
                     for (int i = 0; i < fieldInfos.Length; i++)
                     {
-                        if (!fieldInfos[i].IsDefined(typeof(IgnoreDataMemberAttribute), true))
+                        var key = fieldInfos[i].GetMemberName();
+
+                        if (!string.IsNullOrWhiteSpace(key))
                         {
-                            object value = fieldInfos[i].GetValue(obj);
+                            var value = fieldInfos[i].GetValue(obj);
 
-                            if (value != null)
+                            if (i > 0)
                             {
-                                if (i > 0)
-                                {
-                                    Json.Append(',');
-                                }
-
-                                Json.Append('"');
-                                Json.Append(fieldInfos[i].GetMemberName());
-                                Json.Append("\":");
-
-                                AppendValue(value);
+                                Json.Append(',');
                             }
+
+                            Json.Append('"');
+                            Json.Append(key);
+                            Json.Append("\":");
+
+                            AppendValue(value);
                         }
                     }
 
-                    PropertyInfo[] propertyInfo = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
-
-                    for (int i = 0; i < propertyInfo.Length; i++)
+                    for (int i = 0; i < propertyInfos.Length; i++)
                     {
-                        if (propertyInfo[i].CanRead && !propertyInfo[i].IsDefined(typeof(IgnoreDataMemberAttribute), true))
+                        var key = propertyInfos[i].GetMemberName();
+
+                        if (!string.IsNullOrWhiteSpace(key))
                         {
-                            object value = propertyInfo[i].GetValue(obj, null);
+                            var value = propertyInfos[i].GetValue(obj, null);
 
-                            if (value != null)
+                            if (i > 0)
                             {
-                                if (i > 0)
-                                {
-                                    Json.Append(',');
-                                }
-
-                                Json.Append('"');
-                                Json.Append(propertyInfo[i].GetMemberName());
-                                Json.Append("\":");
-
-                                AppendValue(value);
+                                Json.Append(',');
                             }
+
+                            Json.Append('"');
+                            Json.Append(key);
+                            Json.Append("\":");
+
+                            AppendValue(value);
                         }
                     }
 
@@ -286,8 +284,6 @@ namespace Json
 
     public class JsonReader<T>
     {
-        public const string DateTimePattern = @"^(?<Year>\d{4})-(?<Month>\d{2})-(?<Day>\d{2})T(?<Hour>\d{2}):(?<Minute>\d{2}):(?<Second>\d{2})$";
-
         public T Value { get; private set; }
 
         public JsonReader(string json)
@@ -477,17 +473,14 @@ namespace Json
 
         private object ParseObject(Type type, string[] elems)
         {
-            var instance = FormatterServices.GetUninitializedObject(type);
-
             if (elems.Length % 2 == 0)
             {
-                var nameToField = type
-                    .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy)
-                    .GetMembersName();
+                var instance = FormatterServices.GetUninitializedObject(type);
 
-                var nameToProperty = type
-                    .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy)
-                    .GetMembersName();
+                var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy;
+
+                var nameToField = type.GetFields(flags).GetMembersName();
+                var nameToProperty = type.GetProperties(flags).GetMembersName();
 
                 for (int i = 0; i < elems.Length; i += 2)
                 {
@@ -506,9 +499,10 @@ namespace Json
                         }
                     }
                 }
-            }
 
-            return instance;
+                return instance;
+            }
+            else return null;
         }
     }
 
@@ -603,19 +597,13 @@ namespace Json
             else return new string[0];
         }
 
-        public static string GetMemberName(this MemberInfo member)
+        public static string GetMemberName<Member>(this Member member) where Member : MemberInfo
         {
-            if (member.IsDefined(typeof(DataMemberAttribute), true))
+            if (!member.IsDefined(typeof(JsonIgnoreAttribute), true))
             {
-                var dataMemberAttribute = (DataMemberAttribute)Attribute.GetCustomAttribute(member, typeof(DataMemberAttribute), true);
-
-                if (!string.IsNullOrEmpty(dataMemberAttribute.Name))
-                {
-                    return dataMemberAttribute.Name;
-                }
+                return member.Name;
             }
-
-            return member.Name;
+            else return string.Empty;
         }
 
         public static Dictionary<string, Member> GetMembersName<Member>(this Member[] members) where Member : MemberInfo
@@ -624,15 +612,18 @@ namespace Json
 
             foreach (var member in members)
             {
-                if (!member.IsDefined(typeof(IgnoreDataMemberAttribute), true))
-                {
-                    var name = member.GetMemberName();
+                var name = member.GetMemberName();
 
-                    nameToMember.Add(name, member);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    nameToMember.Add(member.Name, member);
                 }
             }
 
             return nameToMember;
         }
     }
+
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+    public class JsonIgnoreAttribute : Attribute { }
 }
