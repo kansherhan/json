@@ -16,33 +16,17 @@ namespace Json.Serialization
             this.converters = converters;
         }
 
-        public T Parse<T>(string json) => (T)ParseObject(typeof(T), json);
+        public T Parse<T>(string json)
+        {
+            return (T)ParseObject(typeof(T), json);
+        }
 
         public object ParseObject(Type type, string json)
         {
-            var newJson = new StringBuilder();
-
-            for (int i = 0; i < json.Length; i++)
-            {
-                var symbol = json[i];
-
-                if (symbol == '"')
-                {
-                    i = i.AppendUntilStringEnd(json, newJson);
-                }
-                else if (!char.IsWhiteSpace(symbol))
-                {
-                    newJson.Append(symbol);
-                }
-            }
-
-            return ParseValue(type, newJson.ToString());
-        }
-
-        private object ParseValue(Type type, string json)
-        {
             if (json.Length > 0)
             {
+                json = ClearSpaceJson(json);
+                
                 if (converters.TryGetValue(type, out IJsonConverter converter))
                 {
                     return converter.Read(type, json);
@@ -77,8 +61,29 @@ namespace Json.Serialization
                     return objectConverter.Read(type, json);
                 }
             }
-
+            
             return null;
+        }
+
+        private string ClearSpaceJson(string json)
+        {
+            var newJson = new StringBuilder();
+
+            for (int i = 0; i < json.Length; i++)
+            {
+                var symbol = json[i];
+
+                if (symbol == '"')
+                {
+                    i = i.AppendUntilStringEnd(json, newJson);
+                }
+                else if (!char.IsWhiteSpace(symbol))
+                {
+                    newJson.Append(symbol);
+                }
+            }
+
+            return newJson.ToString();
         }
     }
 }

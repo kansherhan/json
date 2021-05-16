@@ -90,9 +90,6 @@ namespace Json.Utils
             else return new string[0];
         }
 
-        public static bool StartsAndEndsWith(this string text, char start, char end)
-        {
-            return text[0] == start && text[text.Length - 1] == end;
-        }
+        public static bool StartsAndEndsWith(this string text, char start, char end) => text[0] == start && text[text.Length - 1] == end;
     }
 }

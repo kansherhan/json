@@ -21,7 +21,7 @@ namespace Json
 
         public static string ToJson(object obj, CultureInfo cultureInfo)
         {
-            var converters = DefaultConverters(cultureInfo);
+            var converters = PrimitiveConverters(cultureInfo);
             var writer = new JsonWriter(converters);
 
             return writer.GetJson(obj);
@@ -29,13 +29,13 @@ namespace Json
 
         public static T FromJson<T>(string json, CultureInfo cultureInfo)
         {
-            var converters = DefaultConverters(cultureInfo);
+            var converters = PrimitiveConverters(cultureInfo);
             var reader = new JsonReader(converters);
 
             return reader.Parse<T>(json);
         }
 
-        public static Dictionary<Type, IJsonConverter> DefaultConverters(CultureInfo cultureInfo)
+        public static Dictionary<Type, IJsonConverter> PrimitiveConverters(CultureInfo cultureInfo)
         {
             return new Dictionary<Type, IJsonConverter>()
             {

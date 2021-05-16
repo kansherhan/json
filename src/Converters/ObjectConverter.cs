@@ -1,9 +1,9 @@
 ﻿using Json.Attributes;
-using Json.Converters.Collections;
 using Json.Data;
 using Json.Serialization;
 using Json.Utils;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -11,146 +11,202 @@ using System.Text;
 
 namespace Json.Converters
 {
-    public class ObjectConverter : CollectionConverter
+    public class ObjectConverter : IJsonConverter
     {
         public const BindingFlags BindingFlag = BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy;
+        
+        private readonly JsonReader jsonReader;
+        private readonly JsonWriter jsonWriter;
 
-        public ObjectConverter(Dictionary<Type, IJsonConverter> converters) : base(converters) { }
+        private readonly Dictionary<Type, IJsonConverter> converters;
 
-        public override object Read(Type type, string json)
+        public ObjectConverter(Dictionary<Type, IJsonConverter> converters)
         {
-            var elems = json.SplitToElements();
+            this.converters = converters;
 
-            if (elems.Length % 2 == 0)
-            {
-                var instance = FormatterServices.GetUninitializedObject(type);
-
-                var fieldDatas = GetPropertyDatas(type.GetFields(BindingFlag));
-                var propertyDatas = GetPropertyDatas(type.GetProperties(BindingFlag));
-
-                var reader = new JsonReader(converters);
-
-                for (int i = 0; i < elems.Length; i += 2)
-                {
-                    if (elems[i].Length > 2)
-                    {
-                        var key = elems[i].RemoveQuotes();
-                        var value = elems[i + 1];
-
-                        if (fieldDatas.TryGetValue(key, out PropertyData fieldData))
-                        {
-                            var fieldInfo = (FieldInfo)fieldData.MemberInfo;
-                            var fieldValue = reader.ParseObject(fieldInfo.FieldType, value);
-
-                            fieldInfo.SetValue(instance, fieldValue);
-                        }
-                        else if (propertyDatas.TryGetValue(key, out PropertyData propertyData))
-                        {
-                            var propertyInfo = (PropertyInfo)propertyData.MemberInfo;
-
-                            if (propertyInfo.CanRead)
-                            {
-                                var propertyValue = reader.ParseObject(propertyInfo.PropertyType, value);
-
-                                propertyInfo.SetValue(instance, propertyValue, null);
-                            }
-                        }
-                    }
-                }
-
-                return instance;
-            }
-            else return null;
+            jsonReader = new JsonReader(converters);
+            jsonWriter = new JsonWriter(converters);
         }
 
-        public override void Write(object value, StringBuilder writer)
+        public object Read(Type type, string json)
+        {
+            var instance = FormatterServices.GetUninitializedObject(type);
+
+            var deserializeObjects = GetDeserializeObjects(type, json);
+
+            foreach (var obj in deserializeObjects)
+            {
+                var member = obj.MemberInfo;
+
+                if (member is FieldInfo fieldInfo)
+                {
+                    var key = obj.Key;
+                    var value = jsonReader.ParseObject(fieldInfo.FieldType, json);
+
+                    fieldInfo.SetValue(instance, value);
+                }
+                else if (member is PropertyInfo propertyInfo)
+                {
+                    var key = obj.Key;
+                    var value = jsonReader.ParseObject(propertyInfo.PropertyType, json);
+
+                    propertyInfo.SetValue(instance, value, null);
+                }
+            }
+
+            return instance;
+        }
+
+        public void Write(object obj, StringBuilder writer)
         {
             writer.Append('{');
 
-            var type = value.GetType();
+            var objects = GetSerializeObjects(obj.GetType());
 
-            var fieldInfos = GetSerializebleMembers(type.GetFields(BindingFlag));
-            var propertyInfos = GetSerializebleMembers(type.GetProperties(BindingFlag));
-
-            var fieldDatas = GetPropertyDatas(fieldInfos);
-            var propertyDatas = GetPropertyDatas(propertyInfos);
-
-            var jsonWriter = new JsonWriter(converters);
-
-            for (int i = 0; i < fieldInfos.Length; i++)
+            for (int i = 0; i < objects.Length; i++)
             {
-                var data = fieldDatas[fieldInfos[i].Name];
+                var member = objects[i].MemberInfo;
 
-                var fieldKey = data.JsonName;
-                var fieldValue = fieldInfos[i].GetValue(value);
-
-                if (i > 0) writer.Append(',');
-
-                writer.Append('"');
-                writer.Append(fieldKey);
-                writer.Append("\":");
-
-                jsonWriter.Write(fieldValue, writer);
-            }
-
-            for (int i = 0; i < propertyInfos.Length; i++)
-            {
-                var propertyInfo = propertyInfos[i];
-
-                if (propertyInfo.CanRead && propertyInfo.GetIndexParameters().Length == 0)
+                if (member is FieldInfo fieldInfo)
                 {
-                    var propertyKey = propertyDatas[propertyInfo.Name].JsonName;
-                    var propertyValue = propertyInfo.GetValue(value, null);
+                    var key = objects[i].Key;
+                    var value = fieldInfo.GetValue(obj);
+                    var addSelector = i > 0;
 
-                    if (i > 0) writer.Append(',');
+                    AddVal(key, value, addSelector, writer);
+                }
+                else if (member is PropertyInfo propertyInfo)
+                {
+                    var key = objects[i].Key;
+                    var value = propertyInfo.GetValue(obj, null);
+                    var addSelector = i > 0;
 
-                    writer.Append('"');
-                    writer.Append(propertyKey);
-                    writer.Append("\":");
-
-                    jsonWriter.Write(propertyValue, writer);
+                    AddVal(key, value, addSelector, writer);
                 }
             }
 
             writer.Append('}');
         }
 
-        public static Member[] GetSerializebleMembers<Member>(Member[] members) where Member : MemberInfo
+        public void AddVal(string key, object value, bool addSelector, StringBuilder writer)
         {
-            var result = new List<Member>();
+            if (addSelector)
+            {
+                writer.Append(",");
+            }
+
+            writer.Append('"');
+            writer.Append(key);
+            writer.Append("\":");
+
+            jsonWriter.Write(value, writer);
+        }
+
+        public static SerializeObject[] GetPropertyDatas<Member>(Member[] members) where Member : MemberInfo
+        {
+            var propertyDatas = new List<SerializeObject>();
 
             foreach (var member in members)
             {
                 if (!member.IsDefined(typeof(JsonIgnoreAttribute), true))
                 {
-                    result.Add(member);
+                    var name = member.Name;
+
+                    if (member.IsDefined(typeof(JsonPropertyAttribute), true))
+                    {
+                        var attributes = member.GetCustomAttributes(typeof(JsonPropertyAttribute), true);
+                        var propertyAttribute = (JsonPropertyAttribute)attributes.Where((s) => typeof(JsonPropertyAttribute) == s.GetType()).First();
+
+                        propertyDatas.Add(new SerializeObject(name, propertyAttribute.Name, member));
+                    }
+                    else
+                    {
+                        propertyDatas.Add(new SerializeObject(name, member));
+                    }
                 }
             }
 
-            return result.ToArray();
+            return propertyDatas.ToArray();
         }
 
-        public static Dictionary<string, PropertyData> GetPropertyDatas<Member>(Member[] members) where Member : MemberInfo
+        public static SerializeObject[] GetSerializeObjects(Type type)
         {
-            var memberDatas = new Dictionary<string, PropertyData>(StringComparer.OrdinalIgnoreCase);
+            var objects = new List<SerializeObject>();
 
-            foreach (var member in members)
+            var fieldDatas = GetPropertyDatas(type.GetFields(BindingFlag));
+            var propertyDatas = GetPropertyDatas(type.GetFields(BindingFlag));
+
+            objects.AddRange(fieldDatas);
+
+            for (int i = 0; i < propertyDatas.Length; i++)
             {
-                var name = member.Name;
+                var property = (PropertyInfo)propertyDatas[i].MemberInfo;
 
-                if (member.IsDefined(typeof(JsonPropertyAttribute), true))
+                if (property.CanRead && property.GetIndexParameters().Length == 0)
                 {
-                    var attribute = (JsonPropertyAttribute)member.GetCustomAttributes(typeof(JsonPropertyAttribute), true)[0];
-
-                    memberDatas.Add(member.Name, new PropertyData(name, attribute.Name, member));
-                }
-                else
-                {
-                    memberDatas.Add(member.Name, new PropertyData(name, member));
+                    objects.Add(propertyDatas[i]);
                 }
             }
 
-            return memberDatas;
+            return objects.ToArray();
+        }
+
+        public static IEnumerable<SerializeObject> GetDeserializeObjects(Type type, string json)
+        {
+            var jsonDatas = GetJsonData(json.SplitToElements());
+            
+            var fieldDatas = GetPropertyDatas(type.GetFields(BindingFlag));
+            var propertyDatas = GetPropertyDatas(type.GetProperties(BindingFlag));
+
+            for (int i = 0; i < jsonDatas.Length; i++)
+            {
+                for (int j = 0; j < fieldDatas.Length; j++)
+                {
+                    if (fieldDatas[j].Key == jsonDatas[i].Key)
+                    {
+                        fieldDatas[j].Value = jsonDatas[i].Value;
+
+                        yield return fieldDatas[j];
+                    }
+                }
+
+                for (int j = 0; j < propertyDatas.Length; j++)
+                {
+                    if (propertyDatas[j].Key == jsonDatas[i].Key)
+                    {
+                        var property = (PropertyInfo)propertyDatas[i].MemberInfo;
+
+                        if (property.CanRead && property.GetIndexParameters().Length == 0)
+                        {
+                            propertyDatas[j].Value = jsonDatas[i].Value;
+
+                            yield return propertyDatas[j];
+                        }
+                    }
+                }
+            }
+        }
+
+        public static JsonObject[] GetJsonData(string[] elems)
+        {
+            if (elems.Length % 2 == 0)
+            {
+                var jsonDatas = new List<JsonObject>();
+
+                for (int i = 0; i < elems.Length; i++)
+                {
+                    var key = elems[i].RemoveQuotes();
+                    var value = elems[i + 1];
+
+                    jsonDatas.Add(new JsonObject(key, value));
+                }
+
+                return jsonDatas.ToArray();
+            }
+            else
+            {
+                throw new Exception();
+            }
         }
     }
 }

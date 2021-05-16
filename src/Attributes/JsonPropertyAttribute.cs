@@ -15,7 +15,7 @@ namespace Json.Attributes
             }
             else
             {
-                throw new Exception("Property name is emtry or null.");
+                throw new Exception("Property name equals emtry or null.");
             }
         }
     }
