@@ -1,9 +1,9 @@
-﻿using Json.Converters;
-using Json.Converters.Primitives;
-using Json.Serialization;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
+using Json.Converters;
+using Json.Converters.Primitives;
+using Json.Data;
+using Json.Serialization;
 
 namespace Json
 {
@@ -13,40 +13,38 @@ namespace Json
         public const string TrueString = "true";
         public const string FalseString = "false";
 
-        public const string DateTimeFormat = "yyyy-MM-ddTHH:mm:ss";
+        public static string ToJson(object value) => ToJson(value, new JsonSettings());
 
-        public static string ToJson(object value) => ToJson(value, CultureInfo.CurrentCulture);
+        public static T FromJson<T>(string json) => FromJson<T>(json, new JsonSettings());
 
-        public static T FromJson<T>(string json) => FromJson<T>(json, CultureInfo.CurrentCulture);
-
-        public static string ToJson(object obj, CultureInfo cultureInfo)
+        public static string ToJson(object obj, JsonSettings settings)
         {
-            var converters = PrimitiveConverters(cultureInfo);
+            var converters = GetPrimitiveConverters(settings);
             var writer = new JsonWriter(converters);
 
             return writer.GetJson(obj);
         }
 
-        public static T FromJson<T>(string json, CultureInfo cultureInfo)
+        public static T FromJson<T>(string json, JsonSettings settings)
         {
-            var converters = PrimitiveConverters(cultureInfo);
+            var converters = GetPrimitiveConverters(settings);
             var reader = new JsonReader(converters);
 
             return reader.Parse<T>(json);
         }
 
-        public static Dictionary<Type, IJsonConverter> PrimitiveConverters(CultureInfo cultureInfo)
+        public static Dictionary<Type, IJsonConverter> GetPrimitiveConverters(JsonSettings settings)
         {
             return new Dictionary<Type, IJsonConverter>()
             {
                 { typeof(int), new IntConverter() },
                 { typeof(bool), new BooleanConverter() },
-                { typeof(float), new FloatConverter(cultureInfo) },
-                { typeof(double), new DoubleConverter(cultureInfo) },
+                { typeof(float), new FloatConverter(settings) },
+                { typeof(double), new DoubleConverter(settings) },
                 { typeof(string), new StringConverter() },
-                { typeof(DateTime), new DateTimeConverter() },
-                { typeof(Enum), new EnumConverter() },
-                { typeof(decimal), new DecimalConverter(cultureInfo) }
+                { typeof(DateTime), new DateTimeConverter(settings) },
+                { typeof(Enum), new EnumConverter(settings) },
+                { typeof(decimal), new DecimalConverter(settings) }
             };
         }
     }

@@ -6,6 +6,9 @@ namespace Json.Converters.Primitives
 {
     public class StringConverter : IJsonConverter
     {
+        private const string SpaceSumbols = "\"\\nrtbf/";
+        private const string ParseSpaceSumbols = "\"\\\n\r\t\b\f/";
+
         public object Read(Type type, string json)
         {
             if (json.Length > 2)
@@ -16,11 +19,11 @@ namespace Json.Converters.Primitives
                 {
                     if (json[i] == '\\' && i + 1 < json.Length - 1)
                     {
-                        var j = "\"\\nrtbf/".IndexOf(json[i + 1]);
+                        var j = SpaceSumbols.IndexOf(json[i + 1]);
 
                         if (j >= 0)
                         {
-                            text.Append("\"\\\n\r\t\b\f/"[j]);
+                            text.Append(ParseSpaceSumbols[j]);
                             ++i;
                         }
                         else if (json[i + 1] == 'u' && i + 5 < json.Length - 1)
@@ -59,11 +62,11 @@ namespace Json.Converters.Primitives
                 {
                     writer.Append('\\');
 
-                    int j = "\"\\\n\r\t\b\f".IndexOf(symbol);
+                    int j = ParseSpaceSumbols.IndexOf(symbol);
 
                     if (j >= 0)
                     {
-                        writer.Append("\"\\nrtbf"[j]);
+                        writer.Append(SpaceSumbols[j]);
                     }
                     else
                     {

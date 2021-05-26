@@ -1,27 +1,30 @@
 ﻿using System;
-using System.Globalization;
 using System.Text;
+using Json.Data;
 
 namespace Json.Converters.Primitives
 {
     public class DecimalConverter : IJsonConverter
     {
-        private readonly CultureInfo cultureInfo;
+        private readonly JsonSettings settings;
 
-        public DecimalConverter(CultureInfo cultureInfo)
+        public DecimalConverter(JsonSettings settings)
         {
-            this.cultureInfo = cultureInfo;
+            this.settings = settings;
         }
 
         public object Read(Type type, string json)
         {
             if (decimal.TryParse(json, out decimal number)) return number;
-            else throw new Exception();
+            else
+            {
+                throw new Exception();
+            }
         }
 
         public void Write(object value, StringBuilder writer)
         {
-            writer.Append(((decimal)value).ToString(cultureInfo));
+            writer.Append(Convert.ToDecimal(value).ToString(settings.Culture));
         }
     }
 }

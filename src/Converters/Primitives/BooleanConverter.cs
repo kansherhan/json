@@ -7,9 +7,14 @@ namespace Json.Converters.Primitives
     {
         public object Read(Type type, string json)
         {
-            if (json == JsonConvert.TrueString) return true;
-            else if (json == JsonConvert.FalseString) return false;
-            else throw new Exception();
+            if (bool.TryParse(json, out bool result))
+            {
+                return result;
+            }
+            else
+            {
+                throw new Exception();
+            }
         }
 
         public void Write(object value, StringBuilder writer)

@@ -59,6 +59,20 @@ namespace Json.Converters
 
         public void Write(object obj, StringBuilder writer)
         {
+            void AddNewValue(string key, object value, bool addSelector, StringBuilder _writer)
+            {
+                if (addSelector)
+                {
+                    writer.Append(",");
+                }
+
+                _writer.Append('"');
+                _writer.Append(key);
+                _writer.Append("\":");
+
+                jsonWriter.Write(value, writer);
+            }
+
             writer.Append('{');
 
             var objects = GetSerializeObjects(obj.GetType());
@@ -73,7 +87,7 @@ namespace Json.Converters
                     var value = fieldInfo.GetValue(obj);
                     var addSelector = i > 0;
 
-                    AddVal(key, value, addSelector, writer);
+                    AddNewValue(key, value, addSelector, writer);
                 }
                 else if (member is PropertyInfo propertyInfo)
                 {
@@ -81,25 +95,11 @@ namespace Json.Converters
                     var value = propertyInfo.GetValue(obj, null);
                     var addSelector = i > 0;
 
-                    AddVal(key, value, addSelector, writer);
+                    AddNewValue(key, value, addSelector, writer);
                 }
             }
 
             writer.Append('}');
-        }
-
-        public void AddVal(string key, object value, bool addSelector, StringBuilder writer)
-        {
-            if (addSelector)
-            {
-                writer.Append(",");
-            }
-
-            writer.Append('"');
-            writer.Append(key);
-            writer.Append("\":");
-
-            jsonWriter.Write(value, writer);
         }
 
         public static SerializeObject[] GetPropertyDatas<Member>(Member[] members) where Member : MemberInfo
@@ -205,7 +205,7 @@ namespace Json.Converters
             }
             else
             {
-                throw new Exception();
+                throw new Exception("");
             }
         }
     }

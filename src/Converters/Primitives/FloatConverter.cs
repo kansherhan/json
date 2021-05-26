@@ -1,27 +1,41 @@
 ﻿using System;
-using System.Globalization;
 using System.Text;
+using Json.Data;
 
 namespace Json.Converters.Primitives
 {
     public class FloatConverter : IJsonConverter
     {
-        private readonly CultureInfo cultureInfo;
+        private readonly JsonSettings settings;
 
-        public FloatConverter(CultureInfo cultureInfo)
+        public FloatConverter(JsonSettings settings)
         {
-            this.cultureInfo = cultureInfo;
+            this.settings = settings;
         }
 
         public object Read(Type type, string json)
         {
             if (float.TryParse(json, out float number)) return number;
-            else throw new Exception();
+            else
+            {
+                throw new Exception();
+            }
         }
 
         public void Write(object value, StringBuilder writer)
         {
-            writer.Append(((float)value).ToString(cultureInfo));
+            if (settings.FloatFormat == FloatFormats.Decimal)
+            {
+                writer.Append(Convert.ToDecimal(value).ToString(settings.Culture));
+            }
+            else if (settings.FloatFormat == FloatFormats.Double)
+            {
+                writer.Append(Convert.ToDouble(value).ToString(settings.Culture));
+            }
+            else
+            {
+                writer.Append(((float)value).ToString(settings.Culture));
+            }
         }
     }
 }
